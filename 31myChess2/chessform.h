@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QPalette>
 #include <QFont>
+#include <QHostInfo>
 
 //network
 #include <QUdpSocket>

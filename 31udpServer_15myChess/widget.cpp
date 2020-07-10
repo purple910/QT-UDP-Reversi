@@ -64,14 +64,18 @@ void Widget::doProcessReadyRead()
     QByteArray ba;
     QHostAddress addr;
     quint16 port;
+    int temp = 0;
+
     while( mySocket->hasPendingDatagrams()){
+
         ba.clear();
         addr.clear();
         port = 0;
         ba.resize(mySocket->pendingDatagramSize());
         mySocket->readDatagram(ba.data(),ba.length(),&addr,&port);
         QString msg = QString(ba);
-        qDebug()<<"msg"<<msg;
+//        qDebug()<<"msg"<<msg;
+
         //上线数据 inline#name#inlineEnd
         if(msg.contains("inline")){
             QStringList list = msg.split("#");
@@ -119,14 +123,21 @@ void Widget::doProcessReadyRead()
             QHostAddress addr;
             quint16 port;
             QString n;
-            for (int i = 0; i < list.length(); ++i) {
+            for (int i = 0; i < listClient.length(); ++i) {
                 if(name == listClient.at(i).name){
                     n = listClient.at(i).name;
                     addr = listClient.at(i).addr;
                     port = listClient.at(i).port;
-                    listClient.removeAt(i);
+                    listClient.removeAt(i);                    
                     break;
-                }
+                }                
+            }
+            //发送到对方
+            temp = 2;
+            if (name == this->myName){
+                temp = 2;
+            }else if (name == this->toName) {
+                temp = 1;
             }
 
             //记录下线
@@ -145,6 +156,7 @@ void Widget::doProcessReadyRead()
                         .arg(listClient.at(i).port);
                 ui->listWidget->addItem(label);
             }
+
         }
 
         //棋盘数据 data#from#to#x#y#role#dataEnd
@@ -170,6 +182,8 @@ void Widget::doProcessReadyRead()
             QString fromname = list.at(1);
             QString toname = list.at(2);
             QString role = list.at(3);
+            this->myName = fromname;
+            this->toName = toname;
             for (int i = 0; i < listClient.length(); ++i) {
                 if(listClient.at(i).name == toname){
                     QString buf = QString("init#%1#%2#%3#initEnd").arg(fromname).arg(toname).arg(role);
@@ -180,8 +194,42 @@ void Widget::doProcessReadyRead()
                 }
             }
         }
+        //拒绝error#from#to#errorEnd
+        else if (msg.contains("error#")) {
+            QStringList list = msg.split("#");
+            for (int i = 0; i < listClient.length(); ++i) {
+                if(listClient.at(i).name == list.at(1)){
+                    mySocket->writeDatagram(msg.toUtf8(),listClient.at(i).addr,listClient.at(i).port);
+                }
+            }
+        }
         else{
             qDebug()<<"msg:"<<msg<<endl;
+        }
+
+        if(temp != 0){
+            QStringList list = msg.split("#");
+            if(temp == 2){
+                this->myName.clear();
+                if(this->toName != nullptr){
+                    for (int j = 0; j < listClient.length(); ++j) {
+                        if(this->toName == listClient.at(j).name){
+                            this->toName.clear();
+                            mySocket->writeDatagram(msg.toUtf8(),listClient.at(j).addr,listClient.at(j).port);
+                        }
+                    }
+                }
+            }else{
+                this->toName.clear();
+                if(this->myName != nullptr){
+                    for (int j = 0; j < listClient.length(); ++j) {
+                        if(this->myName == listClient.at(j).name){
+                            this->myName.clear();
+                            mySocket->writeDatagram(msg.toUtf8(),listClient.at(j).addr,listClient.at(j).port);
+                        }
+                    }
+                }
+            }
         }
     }
 }

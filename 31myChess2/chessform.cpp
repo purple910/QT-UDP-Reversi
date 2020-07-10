@@ -37,6 +37,10 @@ void ChessForm::Init(){
 
     //把棋盘显示在当前容器中
     ui->gridLayout->addWidget(myChess);
+
+    QString localHostName = QHostInfo::localHostName();
+    QHostInfo info = QHostInfo::fromName(localHostName);
+    ui->ip->setText(info.addresses().at(5).toString());
 }
 /*吃子规则*/
  int ChessForm::judgeRule(int x, int y, void *chess, chess::ChessType currentRole, bool eatChess)
@@ -416,7 +420,7 @@ void ChessForm::on_N_VS_N_clicked()
 
     currentPK = NVN;
     //把棋盘初始化
-    setChessInit();
+//    setChessInit();
 
     //通知对方棋盘初始化 init#from#to#role#initEnd
     QString myIp = ui->ip->text();
@@ -428,7 +432,7 @@ void ChessForm::on_N_VS_N_clicked()
             .arg(myName).arg(toName).arg(currentRole);
     mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
 
-    ui->N_VS_N->setEnabled(false);
+
     isPeople = true;
 }
 
@@ -445,45 +449,60 @@ void ChessForm::doProcessReadyRead()
         mySocket->readDatagram(ba.data(),ba.length(),&addr,&port);
 //        qDebug()<<QString(ba);
         QString str = QString(ba);
-        //棋盘初始化数据
+        //棋盘初始化数据init#from#to#role#initEnd
         if(str.contains("init#")){
             QStringList list = str.split("#");
-            if(QString(list.at(3)).toInt() == chess::White){
-                currentRole = chess::Black;
-//                isDown = false;
-            }
-            else if (QString(list.at(3)).toInt() == chess::Black) {
-                currentRole = chess::White;
-            }
-//            qDebug()<<"current:"<<currentRole;
-            currentPK = NVN;
-            setRole(currentRole);
-            setChessInit();
             //开战方
             if(isPeople){
                 qDebug()<<QStringLiteral("init 开战方");
-//                ui->label_a->setText(list.at(1));
-//                qDebug()<<str;
+                setChessInit();
+                ui->N_VS_N->setEnabled(false);
             }
             else{
-                if(QString(list.at(1)).toInt() == chess::White){
-                    ui->comboBox->setCurrentIndex(0);
+                if(QString(list.at(3)).toInt() == chess::White){
+                    currentRole = chess::Black;
                 }
-                else if (QString(list.at(1)).toInt() == chess::Black) {
-                    ui->comboBox->setCurrentIndex(1);
+                else if (QString(list.at(3)).toInt() == chess::Black) {
+                    currentRole = chess::White;
                 }
-                qDebug()<<QStringLiteral("init 接收方");
-                isPeople = true;
-                ui->toname->setText(list.at(1));
 
-                QString myName = ui->fromname->text();
-                ui->label_a->clear();
-                ui->label_a->setText(myName);
-                QFont font ( "Microsoft YaHe", 15, 75);
-                ui->label_a->setFont(font);
-                QPalette pa;
-                pa.setColor(QPalette::WindowText,Qt::red);
-                ui->label_a->setPalette(pa);
+                int ret=  QMessageBox::information(this,QStringLiteral("提示"),QString::fromLocal8Bit("%1:请求开战").arg(list.at(1)),QMessageBox::Yes|QMessageBox::No,QMessageBox::Yes);
+                if(ret == QMessageBox::Yes){
+        //            qDebug()<<"current:"<<currentRole;
+                    currentPK = NVN;
+                    setRole(currentRole);
+                    //初始化
+                    setChessInit();
+
+                    if(QString(list.at(1)).toInt() == chess::White){
+                        ui->comboBox->setCurrentIndex(0);
+                    }
+                    else if (QString(list.at(1)).toInt() == chess::Black) {
+                        ui->comboBox->setCurrentIndex(1);
+                    }
+                    qDebug()<<QStringLiteral("init 接收方");
+                    isPeople = true;
+                    ui->toname->setText(list.at(1));
+
+                    QString myName = ui->fromname->text();
+                    ui->label_a->clear();
+                    ui->label_a->setText(myName);
+                    QFont font ( "Microsoft YaHe", 15, 75);
+                    ui->label_a->setFont(font);
+                    QPalette pa;
+                    pa.setColor(QPalette::WindowText,Qt::red);
+                    ui->label_a->setPalette(pa);
+                    on_N_VS_N_clicked();
+                    ui->N_VS_N->setEnabled(false);
+                }
+                else {
+//                    return;
+                    qDebug()<<QStringLiteral("拒绝请求");
+                    QString msg = QString::fromLocal8Bit("error#%1#%2#errorEnd").arg(list.at(1)).arg(list.at(2));
+                    QString myIp = ui->ip->text();
+                    QString myPort = ui->port->text();
+                    mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
+                }
             }
         }
         //下棋数据 data#from#to#x#y#role#dataEnd
@@ -511,6 +530,20 @@ void ChessForm::doProcessReadyRead()
                 pa.setColor(QPalette::WindowText,Qt::red);
                 ui->label_a->setPalette(pa);
             }
+        }
+        //退出
+        else if (str.contains("unline#")) {
+            QMessageBox::warning(this,QStringLiteral("提示"),QStringLiteral("对方已经退出!"),QMessageBox::Yes);
+            this->close();
+        }
+        else if (str.contains("error#")) {
+            QMessageBox::warning(this,QStringLiteral("提示"),QString::fromLocal8Bit("%1:对方拒绝请求"),QMessageBox::Yes);
+            delete ui->gridLayout->takeAt(0);
+            Init();
+            ui->LCD1->display(0);
+            ui->LCD2->display(0);
+            ui->lbl2->setVisible(true);
+            ui->lbl1->setVisible(true);
         }
     }
 }

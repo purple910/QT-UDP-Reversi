@@ -38,6 +38,9 @@ private:
     QUdpSocket *mySocket;
     QList<member> listClient;
 
+    QString myName;
+    QString toName;
+
     void Init();
 
 };
