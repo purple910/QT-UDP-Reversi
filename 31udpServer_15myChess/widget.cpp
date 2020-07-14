@@ -100,6 +100,7 @@ void Widget::doProcessReadyRead()
                         .arg(listClient.at(i).port);
                 ui->listWidget->addItem(label);
             }
+            mySocket->writeDatagram(msg.toUtf8(),mb.addr,mb.port);
         }
         //需要转发的消息 msg#from#to#content#msgEnd
         else if(msg.contains("msg")){
@@ -199,6 +200,15 @@ void Widget::doProcessReadyRead()
             QStringList list = msg.split("#");
             for (int i = 0; i < listClient.length(); ++i) {
                 if(listClient.at(i).name == list.at(1)){
+                    mySocket->writeDatagram(msg.toUtf8(),listClient.at(i).addr,listClient.at(i).port);
+                }
+            }
+        }
+        //重新开始 undo#status#fromname#toname#undoEnd
+        else if(msg.contains("undo#")){
+            QStringList list = msg.split("#");
+            for (int i = 0; i < listClient.length(); ++i) {
+                if(listClient.at(i).name == list.at(3)){
                     mySocket->writeDatagram(msg.toUtf8(),listClient.at(i).addr,listClient.at(i).port);
                 }
             }

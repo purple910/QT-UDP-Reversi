@@ -19,6 +19,7 @@ ChessForm::~ChessForm()
 void ChessForm::Init(){
     isPeople = false;
     isDown = false;
+    isUndo = false;
     mySocket = new QUdpSocket(this);
     connect(mySocket,SIGNAL(readyRead()),this,SLOT(doProcessReadyRead()));
     connect(mySocket,SIGNAL(error(QAbstractSocket::SocketError)),this,SLOT(doProcessError(QAbstractSocket::SocketError)));
@@ -435,7 +436,7 @@ void ChessForm::on_N_VS_N_clicked()
 
     isPeople = true;
 }
-
+//读取信息
 void ChessForm::doProcessReadyRead()
 {
     QByteArray ba;
@@ -449,8 +450,13 @@ void ChessForm::doProcessReadyRead()
         mySocket->readDatagram(ba.data(),ba.length(),&addr,&port);
 //        qDebug()<<QString(ba);
         QString str = QString(ba);
+        //判断连接
+        if(str.contains("inline#")){
+            QMessageBox::information(this,"info",QStringLiteral("连接成功"),QMessageBox::Yes);
+            ui->btn_bind->setEnabled(false);
+        }
         //棋盘初始化数据init#from#to#role#initEnd
-        if(str.contains("init#")){
+        else if(str.contains("init#")){
             QStringList list = str.split("#");
             //开战方
             if(isPeople){
@@ -536,6 +542,7 @@ void ChessForm::doProcessReadyRead()
             QMessageBox::warning(this,QStringLiteral("提示"),QStringLiteral("对方已经退出!"),QMessageBox::Yes);
             this->close();
         }
+        //拒绝请战
         else if (str.contains("error#")) {
             QMessageBox::warning(this,QStringLiteral("提示"),QString::fromLocal8Bit("%1:对方拒绝请求"),QMessageBox::Yes);
             delete ui->gridLayout->takeAt(0);
@@ -545,14 +552,74 @@ void ChessForm::doProcessReadyRead()
             ui->lbl2->setVisible(true);
             ui->lbl1->setVisible(true);
         }
+        //重新开始   undo#status#fromname#toname#undoEnd
+        else if (str.contains("undo#")) {
+            QStringList list = str.split("#");
+            QString status = list.at(1);
+            int s = status.toInt();
+            if(isUndo){
+                if(s == 1){
+                    setChessInit();
+                    if(currentRole == chess::Black){
+                        if(ui->comboBox->currentText().contains(QStringLiteral("白"))){
+                            isDown = false;
+                        }else {
+                            isDown = true;
+                        }
+                    }else {
+                        if(ui->comboBox->currentText().contains(QStringLiteral("白"))){
+                            isDown = true;
+                        }else {
+                            isDown = false;
+                        }
+                    }
+                }
+            }else {
+                isUndo = true;
+                int te = QMessageBox::information(this,"提示","对方请求重新开始?",QMessageBox::Yes|QMessageBox::No);
+                if(te == QMessageBox::Yes){
+                    setChessInit();
+                    if(currentRole == chess::Black){
+                        if(ui->comboBox->currentText().contains(QStringLiteral("白"))){
+                            isDown = false;
+                        }else {
+                            isDown = true;
+                        }
+                    }else {
+                        if(ui->comboBox->currentText().contains(QStringLiteral("白"))){
+                            isDown = true;
+                        }else {
+                            isDown = false;
+                        }
+                    }
+
+                    QString myIp = ui->ip->text();
+                    QString myPort = ui->port->text();
+                    QString myName = ui->fromname->text();
+                    QString toName = ui->toname->text();
+                    QString msg = QString("undo#%1#%2#%3#undoEnd")
+                            .arg(1).arg(myName).arg(toName);
+                    mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
+                }else {
+                    QString myIp = ui->ip->text();
+                    QString myPort = ui->port->text();
+                    QString myName = ui->fromname->text();
+                    QString toName = ui->toname->text();
+                    QString msg = QString("undo#%1#%2#%3#undoEnd")
+                            .arg(0).arg(myName).arg(toName);
+                    mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
+                }
+            }
+        }
+
     }
 }
-
+//错误信息
 void ChessForm::doProcessError(QAbstractSocket::SocketError err)
 {
     qDebug()<<err;
 }
-
+//绑定服务器
 void ChessForm::on_btn_bind_clicked()
 {
     QString myIp = ui->ip->text();
@@ -561,28 +628,34 @@ void ChessForm::on_btn_bind_clicked()
     //上线数据
     QString msg = QString("inline#%1#unlineEnd").arg(myName);
     mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
-    ui->btn_bind->setEnabled(false);
+
 
 }
 //test
 void ChessForm::on_pushButton_clicked()
 {
-//    QString myIp = ui->ip->text();
-//    QString myPort = ui->port->text();
-//    QString myName = ui->fromname->text();
-//    //需要转发的消息 msg#feom#to#content#msgEnd
-//    QString msg = QString::fromLocal8Bit("msg#%1#%2#[hello world]#msgEnd")
-//            .arg(myName).arg(myName);
-//    mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
-
     int temp = QMessageBox::information(this,"info",QStringLiteral("是否重新开始"),QMessageBox::Yes|QMessageBox::No);
-    if(temp == QMessageBox::Yes){
-        delete ui->gridLayout->takeAt(0);
-        Init();
-        ui->LCD1->display(0);
-        ui->LCD2->display(0);
-        ui->lbl2->setVisible(true);
-        ui->lbl1->setVisible(true);
+    if (currentPK != NVN){
+        if(temp == QMessageBox::Yes){
+            delete ui->gridLayout->takeAt(0);
+            Init();
+            ui->LCD1->display(0);
+            ui->LCD2->display(0);
+            ui->lbl2->setVisible(true);
+            ui->lbl1->setVisible(true);
+        }
+    }else if(currentPK == NVN) {
+        if(temp == QMessageBox::Yes){
+            isUndo = true;
+            QString myIp = ui->ip->text();
+            QString myPort = ui->port->text();
+            QString myName = ui->fromname->text();
+            QString toName = ui->toname->text();
+            //通知对方重新开始 undo#status#fromname#toname#undoEnd
+            QString msg = QString("undo#%1#%2#%3#undoEnd")
+                    .arg(0).arg(myName).arg(toName);
+            mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
+        }
     }
 }
 

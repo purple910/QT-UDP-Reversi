@@ -68,6 +68,7 @@ private:
     QUdpSocket* mySocket;
     bool isPeople;
     bool isDown;
+    bool isUndo;
 
 };
 
