@@ -20,6 +20,7 @@ void ChessForm::Init(){
     isPeople = false;
     isDown = false;
     isUndo = false;
+    isGo = false;
     mySocket = new QUdpSocket(this);
     connect(mySocket,SIGNAL(readyRead()),this,SLOT(doProcessReadyRead()));
     connect(mySocket,SIGNAL(error(QAbstractSocket::SocketError)),this,SLOT(doProcessError(QAbstractSocket::SocketError)));
@@ -293,6 +294,17 @@ void ChessForm::RoleChange()
      }
      else {
          event->ignore();
+         if(isGo){
+             ui->label_a->clear();
+             ui->N_VS_N->setEnabled(true);
+             delete ui->gridLayout->takeAt(0);
+             Init();
+             ui->LCD1->display(0);
+             ui->LCD2->display(0);
+             ui->lbl2->setVisible(true);
+             ui->lbl1->setVisible(true);
+             ui->toname->clear();
+         }
      }
  }
 //--------------------end---------------------
@@ -397,6 +409,17 @@ void ChessForm::doProcessChessData(int i, int j)
 /*网络对战*/
 void ChessForm::on_N_VS_N_clicked()
 {
+    //通知对方棋盘初始化 init#from#to#role#initEnd
+    QString myIp = ui->ip->text();
+    QString myPort = ui->port->text();
+    QString myName = ui->fromname->text();
+    QString toName = ui->toname->text();
+
+    if(myName == toName){
+        QMessageBox::warning(this,QStringLiteral("提示"),QStringLiteral("挑战者不能是自己"),QMessageBox::Yes);
+        return;
+    }
+
     //接收方
     if(isPeople){
         isDown = false;
@@ -423,11 +446,6 @@ void ChessForm::on_N_VS_N_clicked()
     //把棋盘初始化
 //    setChessInit();
 
-    //通知对方棋盘初始化 init#from#to#role#initEnd
-    QString myIp = ui->ip->text();
-    QString myPort = ui->port->text();
-    QString myName = ui->fromname->text();
-    QString toName = ui->toname->text();
 
     QString msg = QString::fromLocal8Bit("init#%1#%2#%3#initEnd")
             .arg(myName).arg(toName).arg(currentRole);
@@ -486,11 +504,11 @@ void ChessForm::doProcessReadyRead()
                     else if (QString(list.at(1)).toInt() == chess::Black) {
                         ui->comboBox->setCurrentIndex(1);
                     }
-                    qDebug()<<QStringLiteral("init 接收方");
+//                    qDebug()<<QStringLiteral("init 接收方");
                     isPeople = true;
                     ui->toname->setText(list.at(1));
 
-                    QString myName = ui->fromname->text();
+                    QString myName = ui->toname->text();
                     ui->label_a->clear();
                     ui->label_a->setText(myName);
                     QFont font ( "Microsoft YaHe", 15, 75);
@@ -540,17 +558,16 @@ void ChessForm::doProcessReadyRead()
         //退出
         else if (str.contains("unline#")) {
             QMessageBox::warning(this,QStringLiteral("提示"),QStringLiteral("对方已经退出!"),QMessageBox::Yes);
+            isGo = true;
             this->close();
         }
         //拒绝请战
         else if (str.contains("error#")) {
-            QMessageBox::warning(this,QStringLiteral("提示"),QString::fromLocal8Bit("%1:对方拒绝请求"),QMessageBox::Yes);
-            delete ui->gridLayout->takeAt(0);
-            Init();
-            ui->LCD1->display(0);
-            ui->LCD2->display(0);
+            QMessageBox::warning(this,QStringLiteral("提示"),QString::fromLocal8Bit("对方拒绝请求"),QMessageBox::Yes);
+            isPeople = false;
             ui->lbl2->setVisible(true);
             ui->lbl1->setVisible(true);
+
         }
         //重新开始   undo#status#fromname#toname#undoEnd
         else if (str.contains("undo#")) {
@@ -573,10 +590,13 @@ void ChessForm::doProcessReadyRead()
                             isDown = false;
                         }
                     }
+                    ui->label_a->clear();
+                }else if (s == 0) {
+                    isUndo = false;
                 }
             }else {
                 isUndo = true;
-                int te = QMessageBox::information(this,"提示","对方请求重新开始?",QMessageBox::Yes|QMessageBox::No);
+                int te = QMessageBox::information(this,QStringLiteral("提示"),QStringLiteral("对方请求重新开始?"),QMessageBox::Yes|QMessageBox::No);
                 if(te == QMessageBox::Yes){
                     setChessInit();
                     if(currentRole == chess::Black){
@@ -592,6 +612,7 @@ void ChessForm::doProcessReadyRead()
                             isDown = false;
                         }
                     }
+                    ui->label_a->clear();
 
                     QString myIp = ui->ip->text();
                     QString myPort = ui->port->text();
@@ -601,6 +622,7 @@ void ChessForm::doProcessReadyRead()
                             .arg(1).arg(myName).arg(toName);
                     mySocket->writeDatagram(msg.toUtf8(),QHostAddress(myIp),myPort.toUInt());
                 }else {
+                    isUndo = false;
                     QString myIp = ui->ip->text();
                     QString myPort = ui->port->text();
                     QString myName = ui->fromname->text();

@@ -69,6 +69,7 @@ private:
     bool isPeople;
     bool isDown;
     bool isUndo;
+    bool isGo;
 
 };
 
