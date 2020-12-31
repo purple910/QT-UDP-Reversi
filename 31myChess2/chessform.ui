@@ -273,7 +273,7 @@
        </rect>
       </property>
       <property name="text">
-       <string>test</string>
+       <string>重置</string>
       </property>
      </widget>
     </widget>
